@@ -21,7 +21,8 @@ forAllSystems (
         cp ${src} $out/bin/${name}
         substituteInPlace $out/bin/${name} \
           --replace "__PYTHON_BIN__" "${pythonBin}" \
-          --replace "__LIB_PATH__" "${libPath}"
+          --replace "__LIB_PATH__" "${libPath}" \
+          --replace "#!/usr/bin/env python3" "#!${pythonBin}"
         chmod +x $out/bin/${name}
       '';
 
