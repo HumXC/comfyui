@@ -24,6 +24,8 @@ forAllSystems (
         ZES_ENABLE_SYSMAN = 1;
         NEOReadDebugKeys = 1;
         OverrideDefaultFP64Settings = 1;
+        OCL_ICD_VENDORS = "${pkgs.intel-compute-runtime}/etc/OpenCL/vendors";
+        ZEBIN_PATH = "${pkgs.intel-graphics-compiler}/bin";
       };
     }
 )
