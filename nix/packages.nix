@@ -6,7 +6,10 @@
 forAllSystems (
   system: let
     pkgs = nixpkgs.legacyPackages.${system};
-    python = pkgs.python3;
+    python = pkgs.python3.withPackages (ps:
+      with ps; [
+        dotenv
+      ]);
     lib = import ./lib.nix {inherit kernel-builder;};
     # 提取库路径
     libPath = lib.mkLibraryPath pkgs;
