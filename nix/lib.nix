@@ -1,12 +1,13 @@
-{nixpkgs}: {
-  forAllSystems = nixpkgs.lib.genAttrs [
-    "aarch64-linux"
-    "x86_64-linux"
-  ];
-
+{kernel-builder}: {
   mkLibraryPath = pkgs:
     pkgs.lib.makeLibraryPath [
       pkgs.stdenv.cc.cc.lib
       pkgs.level-zero
+      # Level Zero GPU runtime from kernel-builder.
+      (pkgs.callPackage
+        "${kernel-builder}/pkgs/xpu-packages/ocloc.nix"
+        {
+          ocloc = null;
+        })
     ];
 }

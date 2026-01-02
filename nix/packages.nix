@@ -1,12 +1,13 @@
 {
   nixpkgs,
   forAllSystems,
+  kernel-builder,
 }:
 forAllSystems (
   system: let
     pkgs = nixpkgs.legacyPackages.${system};
     python = pkgs.python3;
-    lib = import ./lib.nix { inherit nixpkgs; };
+    lib = import ./lib.nix {inherit kernel-builder;};
     # 提取库路径
     libPath = lib.mkLibraryPath pkgs;
 
@@ -33,30 +34,30 @@ forAllSystems (
       sha256 = "sha256-p8v3SMaJGHmbttIpjZQFy32qHuDZFHYwlWazjMTuJoY="; # 首次运行时会显示正确的 hash
     };
 
-desktopItem = pkgs.makeDesktopItem {
-  name = "comfyui";
-  desktopName = "ComfyUI";
-  comment = "ComfyUI Application";
-  icon = "comfyui";
-  exec = "comfyui-run";
-  categories = ["Development"];
-
-  # 直接定义 actions 结构体
-  actions = {
-    "Run" = {
-      name = "Run ComfyUI";
+    desktopItem = pkgs.makeDesktopItem {
+      name = "comfyui";
+      desktopName = "ComfyUI";
+      comment = "ComfyUI Application";
+      icon = "comfyui";
       exec = "comfyui-run";
+      categories = ["Development"];
+
+      # 直接定义 actions 结构体
+      actions = {
+        "Run" = {
+          name = "Run ComfyUI";
+          exec = "comfyui-run";
+        };
+        "Stop" = {
+          name = "Stop ComfyUI";
+          exec = "comfyui-stop";
+        };
+        "Update" = {
+          name = "Update ComfyUI";
+          exec = "comfyui-update";
+        };
+      };
     };
-    "Stop" = {
-      name = "Stop ComfyUI";
-      exec = "comfyui-stop";
-    };
-    "Update" = {
-      name = "Update ComfyUI";
-      exec = "comfyui-update";
-    };
-  };
-};
   in rec {
     run = mkPythonScript "comfyui-run" runSrc;
     update = mkPythonScript "comfyui-update" updateSrc;

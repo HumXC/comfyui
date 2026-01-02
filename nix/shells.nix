@@ -1,13 +1,14 @@
 {
   nixpkgs,
   forAllSystems,
+  kernel-builder,
 }:
 forAllSystems (
   system: let
     pkgs = nixpkgs.legacyPackages.${system};
     python = pkgs.python3;
     pythonPackages = pkgs.python3Packages;
-    lib = import ./lib.nix {inherit nixpkgs;};
+    lib = import ./lib.nix {inherit kernel-builder;};
   in
     with pkgs; {
       default = mkShell {
