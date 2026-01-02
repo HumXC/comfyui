@@ -8,7 +8,7 @@ forAllSystems (
     pkgs = nixpkgs.legacyPackages.${system};
     python = pkgs.python3.withPackages (ps:
       with ps; [
-        dotenv
+        python-dotenv
       ]);
     lib = import ./lib.nix {inherit kernel-builder;};
     # 提取库路径
