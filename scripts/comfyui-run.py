@@ -24,6 +24,9 @@ ENV_OVERRIDES: Dict[str, str] = {
     "NEOReadDebugKeys": "1",
     "OverrideDefaultFP64Settings": "1",
 }
+from dotenv import load_dotenv
+
+load_dotenv(os.path.join(WORK_DIR, ".env"))
 
 
 def ensure_dirs() -> None:
