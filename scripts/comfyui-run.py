@@ -22,6 +22,7 @@ ENV_OVERRIDES: Dict[str, str] = {
     "ONEAPI_DEVICE_SELECTOR": "level_zero:gpu",
     "ZES_ENABLE_SYSMAN": "1",
     "NEOReadDebugKeys": "1",
+    "IGC_EnableDPEmulation": "1",
     "OverrideDefaultFP64Settings": "1",
 }
 from dotenv import load_dotenv
