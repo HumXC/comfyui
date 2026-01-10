@@ -7,6 +7,7 @@
         intel-compute-runtime
         libGL
         libGLU
+        glib
 
         # Level Zero GPU runtime from kernel-builder.
         (callPackage
