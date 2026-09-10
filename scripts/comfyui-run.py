@@ -39,6 +39,8 @@ REPO_DIR = WORK_DIR / "ComfyUI"
 VENV_PATH = WORK_DIR / ".venv"
 VENV_PYTHON = VENV_PATH / "bin" / "python"
 
+CONSTRAINTS_PATH = WORK_DIR / "constraints.txt"
+
 PID_FILE = WORK_DIR / "comfyui.pid"
 LAUNCHER_PID_FILE = WORK_DIR / "launcher.pid"
 LOCK_FILE = WORK_DIR / "launcher.lock"
@@ -72,6 +74,7 @@ ENV_OVERRIDES: Dict[str, str] = {
     # uv / ComfyUI Manager
     "UV_TORCH_BACKEND": "xpu",
     "UV_PYTHON_DOWNLOADS": "never",
+    "UV_CONSTRAINT": str(CONSTRAINTS_PATH),
 }
 
 

@@ -1,18 +1,29 @@
 {
   nixpkgs,
   forAllSystems,
-  kernel-builder,
 }:
 forAllSystems (
   system: let
+    torchVersion = "2.14.0+xpu";
+    torchvisionVersion = "0.29.0+xpu";
+
     pkgs = nixpkgs.legacyPackages.${system};
     python = pkgs.python3.withPackages (ps:
       with ps; [
         dbus-next
       ]);
-    lib = import ./lib.nix {inherit kernel-builder;};
+
     # 提取库路径
-    libPath = lib.mkLibraryPath pkgs;
+    libPath = pkgs.lib.makeLibraryPath [
+      pkgs.stdenv.cc.cc.lib
+      pkgs.level-zero
+      pkgs.intel-compute-runtime
+      pkgs.intel-compute-runtime.drivers
+      pkgs.intel-graphics-compiler
+      pkgs.libGL
+      pkgs.libGLU
+      pkgs.glib
+    ];
 
     pythonBin = "${python}/bin/python3";
     uvBin = "${pkgs.uv}/bin/uv";
@@ -52,6 +63,8 @@ forAllSystems (
 
       substituteInPlace $out/bin/comfyui-setup \
         --replace "#!/usr/bin/env python3" "#!${pythonBin}" \
+        --replace "__TORCH_VERSION__" "${torchVersion}" \
+        --replace "__TORCHVISION_VERSION__" "${torchvisionVersion}" \
         --replace "__PYTHON_BIN__" "${pythonBin}" \
         --replace "__UV_BIN__" "${uvBin}" \
         --replace "__LIB_PATH__" "${libPath}"

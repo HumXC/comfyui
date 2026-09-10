@@ -23,29 +23,106 @@ DEPS_STAMP = WORK_DIR / ".deps_stamp"
 
 COMFYUI_REPO = "https://github.com/Comfy-Org/ComfyUI.git"
 
+TORCH_VERSION = "__TORCH_VERSION__"
+TORCHVISION_VERSION = "__TORCHVISION_VERSION__"
+
+CONSTRAINTS_PATH = WORK_DIR / "constraints.txt"
+
+UV_WRAPPER_PATH = WORK_DIR / "uv"
+
 # 修改 Torch 固定策略时，同时修改这个值。
 # 这样旧环境会自动被识别为需要重新 setup。
 TORCH_POLICY_VERSION = "xpu-v1"
+
+ENV_OVERRIDES: Dict[str, str] = {
+    "WORK_DIR": str(WORK_DIR),
+    "VIRTUAL_ENV": str(VENV_PATH),
+    # Intel XPU
+    "ONEAPI_DEVICE_SELECTOR": "level_zero:gpu",
+    "ZES_ENABLE_SYSMAN": "1",
+    "NEOReadDebugKeys": "1",
+    "IGC_EnableDPEmulation": "1",
+    "OverrideDefaultFP64Settings": "1",
+    # uv
+    "UV_TORCH_BACKEND": "xpu",
+    "UV_PYTHON_DOWNLOADS": "never",
+    "UV_CONSTRAINT": str(CONSTRAINTS_PATH),
+}
+
+
+def expected_uv_wrapper() -> str:
+    return f"""#!/usr/bin/env bash
+set -euo pipefail
+
+export VIRTUAL_ENV="{VENV_PATH}"
+export UV_CONSTRAINT="{CONSTRAINTS_PATH}"
+export UV_TORCH_BACKEND="xpu"
+export UV_PYTHON_DOWNLOADS="never"
+
+exec "{UV_BIN}" "$@"
+"""
+
+
+def ensure_uv_wrapper() -> None:
+    expected = expected_uv_wrapper()
+
+    try:
+        current = UV_WRAPPER_PATH.read_text(
+            encoding="utf-8",
+        )
+    except FileNotFoundError:
+        current = None
+
+    if current != expected:
+        UV_WRAPPER_PATH.write_text(
+            expected,
+            encoding="utf-8",
+        )
+
+        print(f"Updated uv wrapper: {UV_WRAPPER_PATH}")
+    else:
+        print("uv wrapper: OK")
+
+    UV_WRAPPER_PATH.chmod(0o755)
+
+
+def expected_constraints() -> str:
+    return f"torch=={TORCH_VERSION}\n" f"torchvision=={TORCHVISION_VERSION}\n"
+
+
+def ensure_constraints() -> bool:
+    """
+    Ensure constraints.txt matches the versions injected by Nix.
+
+    Returns True if the file was created or changed.
+    """
+    expected = expected_constraints()
+
+    try:
+        current = CONSTRAINTS_PATH.read_text(
+            encoding="utf-8",
+        )
+    except FileNotFoundError:
+        current = None
+
+    if current == expected:
+        print("Python constraints: OK")
+        return False
+
+    CONSTRAINTS_PATH.write_text(
+        expected,
+        encoding="utf-8",
+    )
+
+    print(f"Updated Python constraints: {CONSTRAINTS_PATH}")
+
+    return True
 
 
 def build_env() -> Dict[str, str]:
     env = os.environ.copy()
 
-    env.update(
-        {
-            "WORK_DIR": str(WORK_DIR),
-            "VIRTUAL_ENV": str(VENV_PATH),
-            # Intel XPU
-            "ONEAPI_DEVICE_SELECTOR": "level_zero:gpu",
-            "ZES_ENABLE_SYSMAN": "1",
-            "NEOReadDebugKeys": "1",
-            "IGC_EnableDPEmulation": "1",
-            "OverrideDefaultFP64Settings": "1",
-            # uv
-            "UV_TORCH_BACKEND": "xpu",
-            "UV_PYTHON_DOWNLOADS": "never",
-        }
-    )
+    env.update(ENV_OVERRIDES)
 
     env["LD_LIBRARY_PATH"] = f"{LIB_PATH}:" + env.get("LD_LIBRARY_PATH", "")
 
@@ -70,7 +147,7 @@ def hash_file(path: Path) -> str | None:
 def expected_deps_state() -> dict:
     return {
         "python": PYTHON_BIN,
-        "torch_policy": TORCH_POLICY_VERSION,
+        "constraints": hash_file(CONSTRAINTS_PATH),
         "requirements": hash_file(REPO_DIR / "requirements.txt"),
         "manager_requirements": hash_file(REPO_DIR / "manager_requirements.txt"),
     }
@@ -346,7 +423,6 @@ def install_deps(
         env,
         "torch",
         "torchvision",
-        "torchaudio",
     )
 
     requirements = REPO_DIR / "requirements.txt"
@@ -377,8 +453,9 @@ def install_deps(
 def ensure_deps(
     env: Dict[str, str],
     venv_created: bool,
+    constraints_changed: bool,
 ) -> None:
-    if not venv_created:
+    if not venv_created and not constraints_changed:
         ok, _ = check_deps()
 
         if ok:
@@ -398,9 +475,13 @@ def ensure_deps(
 def setup() -> None:
     ensure_work_dir()
 
+    constraints_changed = ensure_constraints()
+
+    ensure_constraints()
+    ensure_uv_wrapper()
+
     env = build_env()
 
-    # 三部分彼此独立。
     ensure_repo(env)
 
     venv_created = ensure_venv(env)
@@ -408,6 +489,7 @@ def setup() -> None:
     ensure_deps(
         env,
         venv_created=venv_created,
+        constraints_changed=constraints_changed,
     )
 
     print()

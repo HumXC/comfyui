@@ -1,7 +1,6 @@
 {
   nixpkgs,
   forAllSystems,
-  kernel-builder,
 }:
 forAllSystems (
   system: let
@@ -9,17 +8,28 @@ forAllSystems (
     python = pkgs.python3.withPackages (ps: [
       ps.pillow
     ]);
-    lib = import ./lib.nix {inherit kernel-builder;};
+    libPath = pkgs.lib.makeLibraryPath [
+      pkgs.stdenv.cc.cc.lib
+      pkgs.level-zero
+      pkgs.intel-compute-runtime
+      pkgs.intel-graphics-compiler
+
+      pkgs.libGL
+      pkgs.libGLU
+      pkgs.glib
+    ];
   in
     with pkgs; {
       default = mkShell {
         packages = [
           python
+          intel-compute-runtime
+          intel-graphics-compiler
         ];
 
         venvDir = "./.venv";
         # 设置 LD_LIBRARY_PATH 以便 Python 包能找到系统库和 Intel GPU 驱动
-        LD_LIBRARY_PATH = lib.mkLibraryPath pkgs;
+        LD_LIBRARY_PATH = libPath;
         ONEAPI_DEVICE_SELECTOR = "level_zero:gpu";
         ZES_ENABLE_SYSMAN = 1;
         NEOReadDebugKeys = 1;
