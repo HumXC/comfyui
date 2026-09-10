@@ -8,34 +8,17 @@ forAllSystems (
     pkgs = nixpkgs.legacyPackages.${system};
     python = pkgs.python3.withPackages (ps:
       with ps; [
-        python-dotenv
+        dbus-next
       ]);
     lib = import ./lib.nix {inherit kernel-builder;};
     # 提取库路径
     libPath = lib.mkLibraryPath pkgs;
 
     pythonBin = "${python}/bin/python3";
+    uvBin = "${pkgs.uv}/bin/uv";
     runSrc = ../scripts/comfyui-run.py;
+    setupSrc = ../scripts/comfyui-setup.py;
     updateSrc = ../scripts/comfyui-update.py;
-    stopSrc = ../scripts/comfyui-stop.py;
-
-    mkPythonScript = name: src:
-      pkgs.runCommand name {} ''
-        mkdir -p $out/bin
-        cp ${src} $out/bin/${name}
-        substituteInPlace $out/bin/${name} \
-          --replace "__PYTHON_BIN__" "${pythonBin}" \
-          --replace "__LIB_PATH__" "${libPath}" \
-          --replace "#!/usr/bin/env python3" "#!${pythonBin}"
-        chmod +x $out/bin/${name}
-      '';
-
-    # 从网络获取图标
-    iconUrl = "https://framerusercontent.com/images/VYwSRlkOR01d0rBJ6hcCnzXNBc.png";
-    icon = pkgs.fetchurl {
-      url = iconUrl;
-      sha256 = "sha256-p8v3SMaJGHmbttIpjZQFy32qHuDZFHYwlWazjMTuJoY="; # 首次运行时会显示正确的 hash
-    };
 
     desktopItem = pkgs.makeDesktopItem {
       name = "comfyui";
@@ -51,20 +34,59 @@ forAllSystems (
           name = "Run ComfyUI";
           exec = "comfyui-run";
         };
-        "Stop" = {
-          name = "Stop ComfyUI";
-          exec = "comfyui-stop";
-        };
         "Update" = {
           name = "Update ComfyUI";
           exec = "comfyui-update";
         };
+        "Setup" = {
+          name = "Setup ComfyUI";
+          exec = "comfyui-setup";
+        };
       };
     };
   in rec {
-    run = mkPythonScript "comfyui-run" runSrc;
-    update = mkPythonScript "comfyui-update" updateSrc;
-    stop = mkPythonScript "comfyui-stop" stopSrc;
+    setup = pkgs.runCommand "comfyui-setup" {} ''
+      mkdir -p $out/bin
+
+      cp ${setupSrc} $out/bin/comfyui-setup
+
+      substituteInPlace $out/bin/comfyui-setup \
+        --replace "#!/usr/bin/env python3" "#!${pythonBin}" \
+        --replace "__PYTHON_BIN__" "${pythonBin}" \
+        --replace "__UV_BIN__" "${uvBin}" \
+        --replace "__LIB_PATH__" "${libPath}"
+
+      chmod +x $out/bin/comfyui-setup
+    '';
+
+    run = pkgs.runCommand "comfyui-run" {} ''
+      mkdir -p $out/bin
+
+      cp ${runSrc} $out/bin/comfyui-run
+
+      substituteInPlace $out/bin/comfyui-run \
+        --replace "#!/usr/bin/env python3" "#!${pythonBin}" \
+        --replace "__SETUP_BIN__" "${setup}/bin/comfyui-setup" \
+        --replace "__LIB_PATH__" "${libPath}" \
+        --replace "__XDG_OPEN_BIN__" "${pkgs.xdg-utils}/bin/xdg-open" \
+        --replace "__ICON_ARGB_PATH__" "${../assets/comfyui.argb}"
+
+      chmod +x $out/bin/comfyui-run
+    '';
+
+    update = pkgs.runCommand "comfyui-run" {} ''
+      mkdir -p $out/bin
+
+      cp ${updateSrc} $out/bin/comfyui-update
+
+      substituteInPlace $out/bin/comfyui-update \
+        --replace "#!/usr/bin/env python3" "#!${pythonBin}" \
+        --replace "__SETUP_BIN__" "${setup}/bin/comfyui-setup" \
+        --replace "__UV_BIN__" "${uvBin}" \
+        --replace "__LIB_PATH__" "${libPath}"
+
+      chmod +x $out/bin/comfyui-update
+    '';
 
     default = pkgs.stdenv.mkDerivation {
       name = "comfyui-full";
@@ -74,13 +96,13 @@ forAllSystems (
         mkdir -p $out/bin
         cp -r ${run}/bin/* $out/bin/
         cp -r ${update}/bin/* $out/bin/
-        cp -r ${stop}/bin/* $out/bin/
+        cp -r ${setup}/bin/* $out/bin/
 
         mkdir -p $out/share/applications
         cp -r ${desktopItem}/share/applications/* $out/share/applications/
 
         mkdir -p $out/share/icons/hicolor/512x512/apps
-        cp ${icon} $out/share/icons/hicolor/512x512/apps/comfyui.png
+        cp ${../assets/comfyui.png} $out/share/icons/hicolor/512x512/apps/comfyui.png
       '';
     };
   }

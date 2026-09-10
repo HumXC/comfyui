@@ -6,15 +6,15 @@
 forAllSystems (
   system: let
     pkgs = nixpkgs.legacyPackages.${system};
-    python = pkgs.python3;
-    pythonPackages = pkgs.python3Packages;
+    python = pkgs.python3.withPackages (ps: [
+      ps.pillow
+    ]);
     lib = import ./lib.nix {inherit kernel-builder;};
   in
     with pkgs; {
       default = mkShell {
         packages = [
           python
-          pythonPackages.venvShellHook
         ];
 
         venvDir = "./.venv";
