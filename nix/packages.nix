@@ -81,6 +81,8 @@ forAllSystems (
         --replace "#!/usr/bin/env python3" "#!${pythonBin}" \
         --replace "__SETUP_BIN__" "${setup}/bin/comfyui-setup" \
         --replace "__LIB_PATH__" "${libPath}" \
+        --replace "__OCL_ICD_VENDORS__" "${pkgs.intel-compute-runtime}/etc/OpenCL/vendors" \
+        --replace "__ZEBIN_PATH__" "${pkgs.intel-graphics-compiler}/bin" \
         --replace "__XDG_OPEN_BIN__" "${pkgs.xdg-utils}/bin/xdg-open" \
         --replace "__ICON_ARGB_PATH__" "${../assets/comfyui.argb}"
 

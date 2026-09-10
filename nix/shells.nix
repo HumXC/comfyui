@@ -27,7 +27,6 @@ forAllSystems (
           intel-graphics-compiler
         ];
 
-        venvDir = "./.venv";
         # 设置 LD_LIBRARY_PATH 以便 Python 包能找到系统库和 Intel GPU 驱动
         LD_LIBRARY_PATH = libPath;
         ONEAPI_DEVICE_SELECTOR = "level_zero:gpu";

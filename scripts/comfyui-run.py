@@ -28,6 +28,8 @@ XDG_OPEN_BIN = "__XDG_OPEN_BIN__"
 ICON_ARGB_PATH = "__ICON_ARGB_PATH__"
 LIB_PATH = "__LIB_PATH__"
 
+OCL_ICD_VENDORS = "__OCL_ICD_VENDORS__"
+ZEBIN_PATH = "__ZEBIN_PATH__"
 
 # ============================================================================
 # Configuration
@@ -71,6 +73,8 @@ ENV_OVERRIDES: Dict[str, str] = {
     "NEOReadDebugKeys": "1",
     "IGC_EnableDPEmulation": "1",
     "OverrideDefaultFP64Settings": "1",
+    "OCL_ICD_VENDORS": str(OCL_ICD_VENDORS),
+    "OCL_ICD_VENDORS": str(OCL_ICD_VENDORS),
     # uv / ComfyUI Manager
     "UV_TORCH_BACKEND": "xpu",
     "UV_PYTHON_DOWNLOADS": "never",
