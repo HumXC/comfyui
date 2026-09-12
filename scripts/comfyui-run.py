@@ -9,6 +9,8 @@ import sys
 from pathlib import Path
 from typing import Dict, Optional
 
+from runtime_environment import RuntimeEnvironment, prepare_environment
+
 from dbus_next import Variant
 from dbus_next.aio import MessageBus
 from dbus_next.constants import PropertyAccess
@@ -27,6 +29,7 @@ SETUP_BIN = "__SETUP_BIN__"
 XDG_OPEN_BIN = "__XDG_OPEN_BIN__"
 ICON_ARGB_PATH = "__ICON_ARGB_PATH__"
 LIB_PATH = "__LIB_PATH__"
+NIX_BIN = "__NIX_BIN__"
 
 OCL_ICD_VENDORS = "__OCL_ICD_VENDORS__"
 ZEBIN_PATH = "__ZEBIN_PATH__"
@@ -285,6 +288,7 @@ class DBusMenu(ServiceInterface):
     RESTART = 2
     SEPARATOR = 3
     QUIT = 4
+    ENVIRONMENT = 5
 
     def __init__(self, launcher: "ComfyUILauncher") -> None:
         super().__init__("com.canonical.dbusmenu")
@@ -360,6 +364,13 @@ class DBusMenu(ServiceInterface):
                 ),
             }
 
+        if item_id == self.ENVIRONMENT:
+            return {
+                "label": Variant("s", "Open Runtime Environment"),
+                "enabled": Variant("b", not self.launcher.shutting_down),
+                "visible": Variant("b", True),
+            }
+
         if item_id == self.SEPARATOR:
             return {
                 "type": Variant(
@@ -426,6 +437,7 @@ class DBusMenu(ServiceInterface):
             for child_id in (
                 self.OPEN,
                 self.RESTART,
+                self.ENVIRONMENT,
                 self.SEPARATOR,
                 self.QUIT,
             ):
@@ -481,6 +493,7 @@ class DBusMenu(ServiceInterface):
                 self.ROOT,
                 self.OPEN,
                 self.RESTART,
+                self.ENVIRONMENT,
                 self.SEPARATOR,
                 self.QUIT,
             ]
@@ -534,6 +547,9 @@ class DBusMenu(ServiceInterface):
 
         elif item_id == self.RESTART:
             asyncio.create_task(self.launcher.restart_comfyui())
+
+        elif item_id == self.ENVIRONMENT:
+            self.launcher.open_runtime_environment()
 
         elif item_id == self.QUIT:
             asyncio.create_task(self.launcher.shutdown())
@@ -618,6 +634,9 @@ class DBusMenu(ServiceInterface):
 class ComfyUILauncher:
     def __init__(self) -> None:
         self.env = self.build_env()
+        self.restart_lock = asyncio.Lock()
+        self.environment_task: Optional[asyncio.Task] = None
+        self.runtime: Optional[RuntimeEnvironment] = None
 
         self.process: Optional[subprocess.Popen] = None
         self.process_lock = asyncio.Lock()
@@ -867,7 +886,70 @@ class ComfyUILauncher:
     # ComfyUI process
     # ------------------------------------------------------------------------
 
+    def open_runtime_environment(self) -> None:
+        runtime = WORK_DIR / "runtime"
+        flake = runtime / "flake.nix"
+        try:
+            if not flake.exists() and not flake.is_symlink():
+                flake = runtime / "flake.nix.example"
+            if not flake.is_file():
+                raise FileNotFoundError(f"Runtime configuration missing or invalid: {flake}")
+            subprocess.Popen([XDG_OPEN_BIN, str(flake)])
+        except OSError as exc:
+            print(f"Cannot open runtime environment: {exc}", file=sys.stderr)
+
     async def start_comfyui(
+        self,
+        *,
+        open_when_ready: bool = False,
+        restart: bool = False,
+    ) -> bool:
+        async with self.restart_lock:
+            if self.shutting_down:
+                return False
+            if not restart and self.process is not None and self.process.poll() is None:
+                return True
+            self.set_status("Preparing environment")
+            print("Preparing ComfyUI runtime environment...")
+            self.environment_task = asyncio.create_task(prepare_environment(
+                WORK_DIR, self.build_env(), NIX_BIN, sys.executable,
+            ))
+            try:
+                runtime = await self.environment_task
+            except asyncio.CancelledError:
+                if not self.shutting_down:
+                    raise
+                return False
+            except (OSError, ValueError, RuntimeError) as exc:
+                print(f"Failed to prepare runtime environment: {exc}", file=sys.stderr)
+                running = self.process is not None and self.process.poll() is None
+                self.set_status(
+                    "Running (environment reload failed)" if running else "Environment failed",
+                    sni_status="NeedsAttention",
+                )
+                return False
+            finally:
+                self.environment_task = None
+
+            try:
+                if self.shutting_down:
+                    return False
+                if restart:
+                    await self.stop_comfyui()
+                if self.shutting_down:
+                    return False
+                self.env = runtime.env
+                started = await self.launch_comfyui(open_when_ready=open_when_ready)
+                if started:
+                    if self.runtime is not None:
+                        self.runtime.close()
+                    self.runtime = runtime
+                return started
+            finally:
+                if self.runtime is not runtime:
+                    runtime.close()
+
+    async def launch_comfyui(
         self,
         *,
         open_when_ready: bool = False,
@@ -1032,17 +1114,7 @@ class ComfyUILauncher:
             return
 
         print("Restarting ComfyUI...")
-
-        self.set_status("Restarting")
-
-        await self.stop_comfyui()
-
-        if self.shutting_down:
-            return
-
-        await self.start_comfyui(
-            open_when_ready=False,
-        )
+        await self.start_comfyui(restart=True)
 
     # ------------------------------------------------------------------------
     # D-Bus
@@ -1156,7 +1228,17 @@ class ComfyUILauncher:
 
         print("Shutting down ComfyUI launcher...")
 
+        if self.environment_task is not None:
+            self.environment_task.cancel()
+            try:
+                await self.environment_task
+            except asyncio.CancelledError:
+                pass
+
         await self.stop_comfyui()
+        if self.runtime is not None:
+            self.runtime.close()
+            self.runtime = None
 
         self.remove_launcher_pid()
 
@@ -1214,15 +1296,7 @@ class ComfyUILauncher:
 
             return 1
 
-        if not await self.start_comfyui(
-            open_when_ready=False,
-        ):
-            self.remove_launcher_pid()
-
-            if self.bus is not None:
-                self.bus.disconnect()
-
-            return 1
+        await self.start_comfyui(open_when_ready=False)
 
         await self.shutdown_event.wait()
 

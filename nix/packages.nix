@@ -30,6 +30,9 @@ forAllSystems (
     runSrc = ../scripts/comfyui-run.py;
     setupSrc = ../scripts/comfyui-setup.py;
     updateSrc = ../scripts/comfyui-update.py;
+    runtimeTemplate = pkgs.replaceVars ../templates/runtime-flake.nix {
+      nixpkgsUrl = "github:NixOS/nixpkgs/${nixpkgs.rev}";
+    };
 
     desktopItem = pkgs.makeDesktopItem {
       name = "comfyui";
@@ -67,6 +70,7 @@ forAllSystems (
         --replace "__TORCHVISION_VERSION__" "${torchvisionVersion}" \
         --replace "__PYTHON_BIN__" "${pythonBin}" \
         --replace "__UV_BIN__" "${uvBin}" \
+        --replace "__RUNTIME_TEMPLATE__" "${runtimeTemplate}" \
         --replace "__LIB_PATH__" "${libPath}"
 
       chmod +x $out/bin/comfyui-setup
@@ -76,10 +80,12 @@ forAllSystems (
       mkdir -p $out/bin
 
       cp ${runSrc} $out/bin/comfyui-run
+      cp ${../scripts/runtime_environment.py} $out/bin/runtime_environment.py
 
       substituteInPlace $out/bin/comfyui-run \
         --replace "#!/usr/bin/env python3" "#!${pythonBin}" \
         --replace "__SETUP_BIN__" "${setup}/bin/comfyui-setup" \
+        --replace "__NIX_BIN__" "${pkgs.nix}/bin/nix" \
         --replace "__LIB_PATH__" "${libPath}" \
         --replace "__OCL_ICD_VENDORS__" "${pkgs.intel-compute-runtime}/etc/OpenCL/vendors" \
         --replace "__ZEBIN_PATH__" "${pkgs.intel-graphics-compiler}/bin" \

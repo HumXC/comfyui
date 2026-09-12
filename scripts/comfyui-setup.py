@@ -13,6 +13,7 @@ from typing import Dict
 PYTHON_BIN = "__PYTHON_BIN__"  # patched by Nix
 UV_BIN = "__UV_BIN__"  # patched by Nix
 LIB_PATH = "__LIB_PATH__"  # patched by Nix
+RUNTIME_TEMPLATE = "__RUNTIME_TEMPLATE__"
 
 WORK_DIR = Path.home() / ".config" / "comfyui"
 REPO_DIR = WORK_DIR / "ComfyUI"
@@ -472,8 +473,20 @@ def ensure_deps(
         raise RuntimeError(error or "Dependency installation failed")
 
 
+def ensure_runtime_configuration() -> None:
+    runtime = WORK_DIR / "runtime"
+    runtime.mkdir(parents=True, exist_ok=True)
+    example = runtime / "flake.nix.example"
+    if not example.exists() and not example.is_symlink():
+        template = Path(RUNTIME_TEMPLATE).read_text()
+        with example.open("x") as output:
+            output.write(template)
+    print(f"Runtime environment example: {example}")
+
+
 def setup() -> None:
     ensure_work_dir()
+    ensure_runtime_configuration()
 
     constraints_changed = ensure_constraints()
 
@@ -528,6 +541,7 @@ def main() -> int:
     try:
         setup()
     except (
+        OSError,
         RuntimeError,
         subprocess.CalledProcessError,
     ) as exc:
